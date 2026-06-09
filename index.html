@@ -988,6 +988,10 @@
       state.spawnCd = 99;
       state.gold += 8 + state.stageIndex * 4 + state.waveIndex * 3;
       state.overdrive = Math.min(100, state.overdrive + 6);
+      state.bullets = [];
+      state.enemyBullets = [];
+      for (const e of state.enemies) if (!e.dead && e.type !== "boss") e.dead = true;
+      state.enemies = state.enemies.filter(e => !e.dead);
       state.chests.push({ x: state.player.x + rand(-90, 90), y: state.player.y + rand(-90, 90), r: 19, opened: false, supply: state.waveIndex >= 2 });
       state.waves.push({ x: state.player.x, y: state.player.y, r: 18, max: 240, life: .55, color: "#ffd36b" });
       showToast("轮次完成：3 秒后进入下一段", 2.2);
