@@ -66,14 +66,23 @@
     .primary { background: linear-gradient(135deg, #5cdcff, #987bff); color: #071018; border: none; }
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
     .upgrade { width: min(940px, calc(100vw - 28px)); padding: 18px; }
+    .shop { width: min(980px, calc(100vw - 28px)); padding: 18px; }
     .upgradeGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
     .upgradeCard { min-height: 180px; border: 1px solid rgba(255,255,255,.13); background: rgba(255,255,255,.06); border-radius: 8px; padding: 14px; cursor: pointer; }
     .upgradeCard strong { color: #fff4c8; display: block; font-size: 17px; margin-bottom: 8px; }
     .upgradeCard p { margin: 0; color: var(--muted); line-height: 1.55; font-size: 13px; }
+    .shopHead { display:flex; justify-content:space-between; align-items:center; gap:12px; color:var(--muted); }
+    .shopGrid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 14px; }
+    .shopCard { min-height: 188px; border: 1px solid rgba(255,255,255,.13); background: rgba(255,255,255,.055); border-radius: 8px; padding: 14px; cursor: pointer; }
+    .shopCard strong { color: #dff8ff; display:block; margin-bottom:8px; font-size:16px; }
+    .shopCard p { margin:0; color:var(--muted); font-size:13px; line-height:1.55; }
+    .price { margin-top:12px; color:var(--gold); font-weight:900; }
+    .sold { opacity:.45; pointer-events:none; }
     .result { width: min(720px, calc(100vw - 28px)); padding: 24px; text-align: center; }
     .controls { position: absolute; inset: auto 18px 18px 18px; pointer-events: none; display: flex; justify-content: space-between; align-items: end; }
-    .stick { width: 136px; height: 136px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); border-radius: 50%; position: relative; pointer-events: auto; display: none; }
-    .knob { position: absolute; width: 56px; height: 56px; left: 40px; top: 40px; border-radius: 50%; background: rgba(123,232,255,.38); border: 1px solid rgba(255,255,255,.24); }
+    .stick { width: 156px; height: 156px; border: 1px solid rgba(255,255,255,.16); background: radial-gradient(circle, rgba(123,232,255,.1), rgba(255,255,255,.045)); border-radius: 50%; position: relative; pointer-events: auto; display: none; box-shadow: inset 0 0 28px rgba(123,232,255,.12); }
+    .stick::before { content:""; position:absolute; inset:22px; border:1px solid rgba(123,232,255,.2); border-radius:50%; }
+    .knob { position: absolute; width: 62px; height: 62px; left: 47px; top: 47px; border-radius: 50%; background: radial-gradient(circle at 35% 28%, rgba(255,255,255,.85), rgba(123,232,255,.44)); border: 1px solid rgba(255,255,255,.3); box-shadow: 0 0 18px rgba(123,232,255,.28); }
     .touchBtns { display: none; gap: 10px; pointer-events: auto; }
     .roundBtn { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); font-weight: 900; }
     @media (max-width: 780px) {
@@ -84,6 +93,7 @@
       .heroPanel { min-height: auto; }
       .menuArt { min-height: 170px; }
       .upgradeGrid { grid-template-columns: 1fr; }
+      .shopGrid { grid-template-columns: 1fr; }
       .stick, .touchBtns { display: flex; }
       .bossbar { top: 118px; }
     }
@@ -149,7 +159,7 @@
       <div class="panel sidePanel">
         <p class="sectionTitle">选择智能体</p>
         <div id="heroChoices" class="cards"></div>
-        <p class="sectionTitle" style="margin-top:16px">局外强化</p>
+        <p class="sectionTitle" style="margin-top:16px">星尘强化</p>
         <div id="metaBox" class="cards"></div>
       </div>
     </div>
@@ -159,6 +169,23 @@
     <div class="panel upgrade">
       <h2 style="margin:0">神经祝福：选择一项升级</h2>
       <div id="upgradeGrid" class="upgradeGrid"></div>
+    </div>
+  </div>
+
+  <div id="shopScreen" class="screen">
+    <div class="panel shop">
+      <div class="shopHead">
+        <div>
+          <h2 style="margin:0">黑市工坊：购买一项强化</h2>
+          <p class="lead" style="margin:8px 0 0">每章结束随机刷新商品，金币有限，效果可叠加。</p>
+        </div>
+        <div><b id="shopGoldText">金币 0</b></div>
+      </div>
+      <div id="shopGrid" class="shopGrid"></div>
+      <div class="actions">
+        <button id="rerollShopBtn">刷新商品</button>
+        <button id="leaveShopBtn" class="primary">继续下一关</button>
+      </div>
     </div>
   </div>
 
@@ -200,6 +227,9 @@
       bossName: document.getElementById("bossName"), bossPhase: document.getElementById("bossPhase"),
       bossFill: document.getElementById("bossFill"), toast: document.getElementById("toast"),
       menuScreen: document.getElementById("menuScreen"), upgradeScreen: document.getElementById("upgradeScreen"),
+      shopScreen: document.getElementById("shopScreen"), shopGrid: document.getElementById("shopGrid"),
+      shopGoldText: document.getElementById("shopGoldText"), rerollShopBtn: document.getElementById("rerollShopBtn"),
+      leaveShopBtn: document.getElementById("leaveShopBtn"),
       resultScreen: document.getElementById("resultScreen"), resultTitle: document.getElementById("resultTitle"),
       resultText: document.getElementById("resultText"), heroChoices: document.getElementById("heroChoices"),
       metaBox: document.getElementById("metaBox"), upgradeGrid: document.getElementById("upgradeGrid"),
@@ -228,16 +258,31 @@
       { id: "engineer", name: "工程型智能体", desc: "拾取范围大，召唤物和地雷更强。", hp: 112, speed: 220, atk: .96, crit: .07, allyBias: "collect" }
     ];
     const UPGRADES = [
-      { id: "blades", name: "轨道刀轮", desc: "增加环绕刀轮，对近身敌人持续伤害。", max: 5, apply: r => { r.blades++; } },
-      { id: "laser", name: "棱镜激光", desc: "自动锁定远处敌人，造成穿透伤害。", max: 5, apply: r => { r.laser++; } },
-      { id: "bolt", name: "链式电弧", desc: "命中后在敌人之间弹跳。", max: 5, apply: r => { r.bolt++; } },
-      { id: "mine", name: "智能地雷", desc: "定期部署追踪地雷，爆炸清场。", max: 5, apply: r => { r.mine++; } },
-      { id: "drone", name: "队友升级", desc: "AI 队友行动频率和伤害提升。", max: 5, apply: r => { r.drone++; } },
-      { id: "vamp", name: "纳米吸血", desc: "击败敌人时回复生命。", max: 3, apply: r => { r.vamp += .015; } },
-      { id: "haste", name: "神经加速", desc: "移动速度、射速和闪避回复提升。", max: 4, apply: r => { r.speed += .08; r.fireRate += .1; } },
-      { id: "magnet", name: "磁场协议", desc: "拾取范围扩大，AI 队友更积极收集经验。", max: 4, apply: r => { r.magnet += 42; } },
-      { id: "bulwark", name: "自适应护盾", desc: "周期生成护盾，低血量时更强。", max: 4, apply: r => { r.shieldMax += 18; } },
-      { id: "damage", name: "伤害核心", desc: "所有武器伤害提升。", max: 5, apply: r => { r.damage += .14; } }
+      { id: "blades", name: "轨道刀阵", desc: "直接增加 2 把环绕刀轮，近身清怪明显变强。", max: 4, apply: r => { r.blades += 2; } },
+      { id: "laser", name: "棱镜矩阵", desc: "激光等级 +2，穿透伤害和释放频率提升。", max: 4, apply: r => { r.laser += 2; r.damage += .05; } },
+      { id: "bolt", name: "雷链扩容", desc: "电弧等级 +2，弹跳次数和群体爆发提升。", max: 4, apply: r => { r.bolt += 2; } },
+      { id: "mine", name: "地雷工厂", desc: "地雷等级 +2，并缩短部署间隔。", max: 4, apply: r => { r.mine += 2; r.fireRate += .06; } },
+      { id: "drone", name: "双核队友", desc: "AI 队友等级 +2，攻击、治疗和护盾更可靠。", max: 4, apply: r => { r.drone += 2; } },
+      { id: "vamp", name: "血能回路", desc: "击败敌人回复生命，可叠加。", max: 5, apply: r => { r.vamp += .02; } },
+      { id: "haste", name: "疾行协议", desc: "移速、射速、闪避回复大幅提升。", max: 5, apply: r => { r.speed += .14; r.fireRate += .18; } },
+      { id: "magnet", name: "战利品雷达", desc: "拾取范围大幅扩大，并提高金币获取效率。", max: 5, apply: r => { r.magnet += 70; r.goldBonus += .08; } },
+      { id: "bulwark", name: "硬化护盾", desc: "护盾上限和周期回复提升，适合硬抗弹幕。", max: 5, apply: r => { r.shieldMax += 32; r.armor += .04; } },
+      { id: "damage", name: "过载核心", desc: "所有武器伤害大幅提升，可叠加。", max: 6, apply: r => { r.damage += .24; } },
+      { id: "critFlow", name: "暴击洪流", desc: "暴击率和暴击伤害提升，适合高攻速构筑。", max: 5, apply: r => { r.crit += .055; r.critDmg += .18; } },
+      { id: "rebound", name: "折返弹道", desc: "玩家弹体获得额外穿透，弹幕更容易清线。", max: 4, apply: r => { r.pierce += 1; r.damage += .06; } },
+      { id: "evasion", name: "闪避反击", desc: "闪避后短时间提升攻速和移速。", max: 4, apply: r => { r.dashPower += 1; r.speed += .05; } }
+    ];
+    const SHOP_ITEMS = [
+      { id: "forgeBlade", name: "锻刃套件", desc: "轨道刀轮 +1，所有伤害 +8%。", price: 34, apply: r => { r.blades++; r.damage += .08; } },
+      { id: "medKit", name: "战地医疗包", desc: "立即回复 45 生命，并提升生命上限。", price: 28, apply: r => { state.player.maxHp += 14; state.player.hp = Math.min(state.player.maxHp, state.player.hp + 45); } },
+      { id: "goldEngine", name: "淘金模块", desc: "金币获取 +18%，可叠加。", price: 38, apply: r => { r.goldBonus += .18; } },
+      { id: "blackLens", name: "黑镜透镜", desc: "激光 +1，暴击率 +5%。", price: 42, apply: r => { r.laser++; r.crit += .05; } },
+      { id: "stormCoil", name: "风暴线圈", desc: "电弧 +1，攻速 +12%。", price: 40, apply: r => { r.bolt++; r.fireRate += .12; } },
+      { id: "armorPlate", name: "复合装甲", desc: "减伤 +8%，护盾上限 +18。", price: 36, apply: r => { r.armor += .08; r.shieldMax += 18; } },
+      { id: "booster", name: "喷射背包", desc: "移速 +12%，闪避冷却更短。", price: 32, apply: r => { r.speed += .12; r.dashPower += 1; } },
+      { id: "droneChip", name: "队友芯片", desc: "AI 队友 +1，拾取范围 +35。", price: 35, apply: r => { r.drone++; r.magnet += 35; } },
+      { id: "minePack", name: "爆破背包", desc: "地雷 +1，金币 +12。", price: 30, apply: r => { r.mine++; state.gold += 12; } },
+      { id: "riskContract", name: "高风险契约", desc: "生命 -18，伤害 +32%。", price: 24, apply: r => { state.player.hp = Math.max(1, state.player.hp - 18); r.damage += .32; } }
     ];
     const ENEMY = {
       seeker: { hp: 20, speed: 96, r: 15, color: "#7b6cff", value: 3 },
@@ -255,8 +300,8 @@
     ];
     const STAGES = [
       { name: "废城外环", rule: "小怪试炼", boss: 0, waves: [
-        { name: "侦察群", goal: 18, duration: 26, types: ["seeker"], pack: [2, 4], elite: false },
-        { name: "交叉火力", goal: 28, duration: 34, types: ["seeker", "ranger"], pack: [3, 5], elite: false },
+        { name: "侦察群", goal: 24, duration: 30, types: ["seeker"], pack: [2, 4], elite: false },
+        { name: "交叉火力", goal: 34, duration: 38, types: ["seeker", "ranger"], pack: [3, 5], elite: false },
         { name: "精英破门", goal: 2, duration: 32, types: ["charger"], pack: [1, 2], elite: true },
         { name: "Boss 战", boss: true }
       ]},
@@ -288,12 +333,12 @@
 
     const state = {
       w: 0, h: 0, scale: 1, cam: { x: 0, y: 0 }, t: 0, last: now(), phase: "menu",
-      selectedHero: "guardian", meta: { souls: 0, power: 0, guard: 0, economy: 0 },
+      selectedHero: "guardian", meta: { stardust: 0, power: 0, guard: 0, economy: 0 },
       player: null, ally: null, director: null, stats: null,
       enemies: [], bullets: [], enemyBullets: [], xp: [], coins: [], particles: [], texts: [], mines: [], chests: [], props: [], hazards: [],
       boss: null, elapsed: 0, kills: 0, gold: 0, level: 1, xpNeed: 18, xpValue: 0,
       spawnCd: 0, eliteCd: 24, bossIndex: -1, toastUntil: 0, toastText: "", pausedForUpgrade: false,
-      stageIndex: 0, waveIndex: 0, waveKills: 0, waveTimer: 0, waveStarted: false, stageClearCd: 0,
+      stageIndex: 0, waveIndex: 0, waveKills: 0, waveTimer: 0, waveStarted: false, stageClearCd: 0, shopStock: [], shopRerolls: 0, stillTime: 0, focus: .72,
       gameOver: false, victory: false, shake: 0, bg: [], waves: [], trails: [],
       combo: 0, comboTimer: 0, overdrive: 0, supplyCd: 18
     };
@@ -302,10 +347,10 @@
       const h = HEROES.find(x => x.id === heroId) || HEROES[0];
       return {
         heroId, maxHp: h.hp + state.meta.guard * 8, speedBase: h.speed, atk: h.atk + state.meta.power * .04,
-        crit: h.crit, fireRate: 0, damage: 0, speed: 0, magnet: 92 + state.meta.economy * 7,
+        crit: h.crit, critDmg: .8, fireRate: 0, damage: 0, speed: 0, armor: 0, goldBonus: 0, pierce: 0, dashPower: 0, magnet: 92 + state.meta.economy * 7,
         blades: 1, laser: 0, bolt: 0, mine: 0, drone: 1, vamp: 0, shieldMax: 18 + state.meta.guard * 4,
         shield: 0, shieldCd: 2, dashCd: 0, fireCd: 0, laserCd: 1, boltCd: .6, mineCd: 3,
-        upgrades: { blades: 1, laser: 0, bolt: 0, mine: 0, drone: 1, vamp: 0, haste: 0, magnet: 0, bulwark: 0, damage: 0 }
+        upgrades: { blades: 0, laser: 0, bolt: 0, mine: 0, drone: 0, vamp: 0, haste: 0, magnet: 0, bulwark: 0, damage: 0, critFlow: 0, rebound: 0, evasion: 0 }
       };
     }
 
@@ -332,8 +377,8 @@
       state.ally = { x: -36, y: 24, vx: 0, vy: 0, r: 12, mode: "护卫", cd: 0, healCd: 5, shieldCd: 4 };
       state.director = { threat: 0, tempo: 0, mercy: 0, pressure: 0, mode: "观察玩家", hurtWindow: 0, killWindow: 0, lastHp: state.player.hp, tick: 0 };
       Object.assign(state, { enemies: [], bullets: [], enemyBullets: [], xp: [], coins: [], particles: [], texts: [], mines: [], chests: [], props: [], hazards: [], boss: null, waves: [], trails: [],
-        elapsed: 0, kills: 0, gold: 0, level: 1, xpNeed: 18, xpValue: 0, spawnCd: .8, eliteCd: 22, bossIndex: -1, phase: "running", gameOver: false, victory: false, pausedForUpgrade: false, shake: 0,
-        stageIndex: 0, waveIndex: 0, waveKills: 0, waveTimer: 0, waveStarted: false, stageClearCd: 0,
+        elapsed: 0, kills: 0, gold: 0, level: 1, xpNeed: 86, xpValue: 0, spawnCd: .8, eliteCd: 22, bossIndex: -1, phase: "running", gameOver: false, victory: false, pausedForUpgrade: false, shake: 0,
+        stageIndex: 0, waveIndex: 0, waveKills: 0, waveTimer: 0, waveStarted: false, stageClearCd: 0, shopStock: [], shopRerolls: 0, stillTime: 0, focus: .72,
         combo: 0, comboTimer: 0, overdrive: 0, supplyCd: 16 });
       if (loadData) {
         state.elapsed = loadData.elapsed || 0; state.kills = loadData.kills || 0; state.gold = loadData.gold || 0;
@@ -380,7 +425,7 @@
       const p = state.player;
       const x = clamp(p.x + Math.cos(angle) * radius, -ARENA / 2 + 80, ARENA / 2 - 80);
       const y = clamp(p.y + Math.sin(angle) * radius, -ARENA / 2 + 80, ARENA / 2 - 80);
-      const scale = 1 + state.elapsed / 520 + (elite ? .65 : 0);
+      const scale = 1.16 + state.stageIndex * .22 + state.waveIndex * .06 + state.elapsed / 640 + (elite ? .82 : 0);
       state.enemies.push({
         type, x, y, vx: 0, vy: 0, r: def.r * (elite ? 1.18 : 1), hp: def.hp * scale, maxHp: def.hp * scale,
         speed: def.speed * (1 + state.elapsed / 900), color: def.color, value: def.value * (elite ? 3 : 1),
@@ -428,6 +473,7 @@
       updateParticles(dt);
       updateSpawns(dt);
       updateCombatTempo(dt);
+      updatePressureEvents(dt);
       state.cam.x = clamp(state.player.x - state.w / state.scale / 2, -ARENA/2, ARENA/2 - state.w / state.scale);
       state.cam.y = clamp(state.player.y - state.h / state.scale / 2, -ARENA/2, ARENA/2 - state.h / state.scale);
       state.shake = Math.max(0, state.shake - dt);
@@ -465,6 +511,8 @@
       resolveProps(p);
       if (iv.len > .1) p.face = Math.atan2(iv.y, iv.x);
       if (iv.len > .1 && Math.random() < .45) state.trails.push({ x: p.x - iv.x * 10, y: p.y - iv.y * 10, r: 14, life: .28, color: "#2f78c8" });
+      state.stillTime = iv.len > .08 ? Math.max(0, state.stillTime - dt * 3) : state.stillTime + dt;
+      state.focus = clamp(state.focus + (iv.len > .18 ? dt * .32 : -dt * .58), .38, 1.18);
       p.inv = Math.max(0, p.inv - dt);
       p.anim += dt * (iv.len > .1 ? 12 : 5);
       s.dashCd = Math.max(0, s.dashCd - dt);
@@ -480,8 +528,10 @@
       if (s.dashCd > 0) return;
       const iv = inputVector();
       const a = iv.len > .1 ? Math.atan2(iv.y, iv.x) : p.face;
-      p.vx += Math.cos(a) * 650; p.vy += Math.sin(a) * 650;
-      p.inv = .36; s.dashCd = 1.4;
+      p.vx += Math.cos(a) * (650 + s.dashPower * 80); p.vy += Math.sin(a) * (650 + s.dashPower * 80);
+      p.inv = .36 + s.dashPower * .035; s.dashCd = Math.max(.82, 1.4 - s.dashPower * .08);
+      state.focus = Math.min(1.25, state.focus + .22 + s.dashPower * .04);
+      if (s.dashPower > 0) { s.fireCd = Math.min(s.fireCd, .05); state.overdrive = Math.min(100, state.overdrive + s.dashPower * 2); }
       state.waves.push({ x: p.x, y: p.y, r: 16, max: 96, life: .34, color: "#7be8ff" });
       for (let i = 0; i < 5; i++) state.trails.push({ x: p.x - Math.cos(a) * i * 12, y: p.y - Math.sin(a) * i * 12, r: 20 - i * 2, life: .34 - i * .04, color: "#7be8ff" });
       burst(p.x, p.y, "#7be8ff", 22, 260);
@@ -526,32 +576,32 @@
       s.fireCd -= dt; s.laserCd -= dt; s.boltCd -= dt; s.mineCd -= dt;
       if (s.fireCd <= 0 && state.enemies.length) {
         const e = nearest(p, state.enemies);
-        const dmg = rollDamage(14 + s.blades * 2);
+        const dmg = rollDamage(14 + s.blades * 2) * state.focus;
         fireBullet(p.x, p.y, e.x - p.x, e.y - p.y, 420, dmg, "#7be8ff", 5, false, "pulse");
         s.fireCd = Math.max(.13, .42 / (1 + s.fireRate));
       }
       if (s.laser > 0 && s.laserCd <= 0 && state.enemies.length) {
         const e = farTarget();
         if (e) {
-          state.bullets.push({ x: p.x, y: p.y, vx: 0, vy: 0, r: 0, damage: rollDamage(22 + s.laser * 8), ttl: .12, color: "#ff7bbb", laser: true, tx: e.x, ty: e.y, pierce: 5 });
+          state.bullets.push({ x: p.x, y: p.y, vx: 0, vy: 0, r: 0, damage: rollDamage(22 + s.laser * 8) * state.focus, ttl: .12, color: "#ff7bbb", laser: true, tx: e.x, ty: e.y, pierce: 5 });
           s.laserCd = Math.max(.45, 1.7 - s.laser * .16);
         }
       }
       if (s.bolt > 0 && s.boltCd <= 0 && state.enemies.length) {
         const e = nearest(p, state.enemies);
-        chainHit(e, rollDamage(14 + s.bolt * 5), 2 + s.bolt);
+        chainHit(e, rollDamage(14 + s.bolt * 5) * state.focus, 2 + s.bolt);
         s.boltCd = Math.max(.5, 1.8 - s.bolt * .16);
       }
       if (s.mine > 0 && s.mineCd <= 0) {
         const a = rand(0, Math.PI * 2), rr = rand(50, 120);
-        state.mines.push({ x: p.x + Math.cos(a) * rr, y: p.y + Math.sin(a) * rr, r: 13, ttl: 9, armed: .45, damage: rollDamage(38 + s.mine * 12) });
+        state.mines.push({ x: p.x + Math.cos(a) * rr, y: p.y + Math.sin(a) * rr, r: 13, ttl: 9, armed: .45, damage: rollDamage(38 + s.mine * 12) * state.focus });
         s.mineCd = Math.max(.75, 3.4 - s.mine * .28);
       }
       for (let i = 0; i < s.blades; i++) {
         const a = state.t * (2.6 + s.blades * .1) + i / s.blades * Math.PI * 2;
         const bx = p.x + Math.cos(a) * (58 + s.blades * 4);
         const by = p.y + Math.sin(a) * (58 + s.blades * 4);
-        for (const e of state.enemies) if (!e.dead && Math.hypot(e.x - bx, e.y - by) < e.r + 13) damageEnemy(e, rollDamage((8 + s.blades * 2) * dt * 6), bx, by);
+        for (const e of state.enemies) if (!e.dead && Math.hypot(e.x - bx, e.y - by) < e.r + 13) damageEnemy(e, rollDamage((8 + s.blades * 2) * dt * 6) * state.focus, bx, by);
       }
     }
 
@@ -578,9 +628,10 @@
         e.vx *= Math.pow(.018, dt); e.vy *= Math.pow(.018, dt);
         e.x += e.vx * dt; e.y += e.vy * dt;
         resolveProps(e);
-        if (e.type === "ranger" && e.cd <= 0 && d < 520) {
-          fireBullet(e.x, e.y, dx, dy, 260, 10 + state.elapsed / 80, "#ffd36b", 5, true, "enemy");
-          e.cd = rand(1.6, 2.5);
+        if (e.type === "ranger" && e.cd <= 0 && d < 560) {
+          const lead = .22 + state.stageIndex * .03;
+          fireBullet(e.x, e.y, dx + p.vx * lead, dy + p.vy * lead, 285 + state.stageIndex * 12, 11 + state.stageIndex * 2, "#ffd36b", 5, true, "enemy");
+          e.cd = rand(1.25, 2.1);
         }
         if (d < e.r + p.r + 2) damagePlayer(e.elite ? 16 : e.type === "boss" ? 24 : 10, e.x, e.y);
       }
@@ -796,8 +847,52 @@
         state.stats.shield = Math.min(state.stats.shieldMax * 1.8, state.stats.shield + 36);
         state.chests.push({ x: state.player.x + 70, y: state.player.y, r: 22, opened: false, supply: true });
         if (state.stageIndex >= STAGES.length) return finish(true);
-        showToast("章节突破！准备进入：" + currentStage().name, 2.2);
+        openShop();
       }
+    }
+
+    function openShop() {
+      state.phase = "shop";
+      state.shopRerolls = 0;
+      rollShop();
+      ui.shopScreen.classList.add("on");
+      showToast("章节突破：黑市工坊已开放", 1.8);
+    }
+    function rollShop() {
+      state.shopStock = [];
+      const pool = SHOP_ITEMS.slice();
+      while (state.shopStock.length < 4 && pool.length) {
+        const i = irand(0, pool.length - 1);
+        const item = pool.splice(i, 1)[0];
+        const rare = Math.random() < .18;
+        state.shopStock.push(Object.assign({ bought: false, rare }, item, { price: Math.round(item.price * (1 + state.stageIndex * .22) * (rare ? 1.45 : 1)) }));
+      }
+      renderShop();
+    }
+    function renderShop() {
+      ui.shopGoldText.textContent = "金币 " + state.gold;
+      ui.shopGrid.innerHTML = "";
+      for (const item of state.shopStock) {
+        const div = document.createElement("div");
+        div.className = "shopCard" + (item.bought ? " sold" : "");
+        const rareText = item.rare ? "稀有商品：" : "";
+        div.innerHTML = "<strong>" + rareText + item.name + "</strong><p>" + item.desc + "</p><div class='price'>价格 " + item.price + " 金币</div>";
+        div.onclick = () => {
+          if (item.bought || state.gold < item.price) { showToast(state.gold < item.price ? "金币不足" : "已购买"); return; }
+          state.gold -= item.price; item.bought = true; item.apply(state.stats);
+          if (item.rare) { state.stats.damage += .08; state.stats.speed += .04; }
+          showToast("购买：" + item.name);
+          renderShop(); saveGame();
+        };
+        ui.shopGrid.appendChild(div);
+      }
+    }
+    function closeShop() {
+      ui.shopScreen.classList.remove("on");
+      state.phase = "running";
+      state.waveStarted = false;
+      showToast("进入：" + currentStage().name, 1.8);
+      saveGame();
     }
 
     function updateCombatTempo(dt) {
@@ -809,6 +904,19 @@
       state.waves = state.waves.filter(w => w.life > 0);
       state.trails = state.trails.filter(t => t.life > 0);
       if (state.overdrive >= 100 && state.enemies.length > 24) aiOverdrive();
+    }
+
+    function updatePressureEvents(dt) {
+      if (state.phase !== "running" || !state.player || state.player.inv > 0) return;
+      if (state.stillTime > 2.6 && Math.random() < dt * (state.stillTime > 5 ? 2.4 : 1.1)) {
+        const p = state.player;
+        const a = rand(0, Math.PI * 2);
+        warnLine(p.x - Math.cos(a) * 520, p.y - Math.sin(a) * 520, a);
+        fireBullet(p.x - Math.cos(a) * 520, p.y - Math.sin(a) * 520, Math.cos(a), Math.sin(a), 520, 16 + state.stageIndex * 3, "#ff6969", 7, true, "enemy");
+        state.hazards.push({ x: clamp(p.x + rand(-36, 36), -ARENA/2 + 160, ARENA/2 - 160), y: clamp(p.y + rand(-36, 36), -ARENA/2 + 160, ARENA/2 - 160), r: 42 + state.stageIndex * 3, timer: 2.4, active: false });
+        state.stillTime = 1.2;
+        showText(p.x, p.y - 46, "AI锁定：移动！", "#ff6969", 15);
+      }
     }
 
     function spawnSupply() {
@@ -842,7 +950,7 @@
         const value = Math.max(1, Math.round(e.value || 3));
         state.xp.push({ x: e.x, y: e.y, r: 8, value, color: e.elite || e.type === "boss" ? "#ffd36b" : "#7be8ff", vx: rand(-40,40), vy: rand(-40,40) });
         if (state.combo > 20 && state.combo % 10 === 0) { state.gold += 3; showText(e.x, e.y - 28, "连击+" + state.combo, "#ffd36b", 16); }
-        if (Math.random() < (e.elite ? .95 : .12)) state.coins.push({ x: e.x + rand(-12,12), y: e.y + rand(-12,12), r: 7, value: e.elite ? 12 : 3 });
+        if (Math.random() < (e.elite ? .95 : .12)) state.coins.push({ x: e.x + rand(-12,12), y: e.y + rand(-12,12), r: 7, value: Math.round((e.elite ? 12 : 3) * (1 + state.stats.goldBonus)) });
         if (e.elite || e.type === "boss") state.chests.push({ x: e.x, y: e.y, r: 19, opened: false });
         if (state.stats.vamp) state.player.hp = Math.min(state.player.maxHp, state.player.hp + state.player.maxHp * state.stats.vamp);
         state.waves.push({ x: e.x, y: e.y, r: 8, max: e.elite || e.type === "boss" ? 92 : 42, life: e.elite || e.type === "boss" ? .42 : .22, color: e.color });
@@ -859,6 +967,7 @@
         const blocked = Math.min(s.shield, dmg);
         s.shield -= blocked; dmg -= blocked;
       }
+      dmg *= Math.max(.35, 1 - s.armor);
       if (dmg > 0) p.hp -= dmg;
       p.inv = .45; state.director.hurtWindow += dmg / 20; state.shake = .14;
       const a = Math.atan2(p.y - y, p.x - x);
@@ -870,8 +979,8 @@
 
     function gainXp(v) {
       state.xpValue += v;
-      while (state.xpValue >= state.xpNeed) {
-        state.xpValue -= state.xpNeed; state.level++; state.xpNeed = Math.round(state.xpNeed * 1.22 + 8);
+      if (state.xpValue >= state.xpNeed && state.phase === "running") {
+        state.xpValue -= state.xpNeed; state.level++; state.xpNeed = Math.round(state.xpNeed * 1.45 + 26);
         openUpgrade();
       }
     }
@@ -907,7 +1016,7 @@
     function openChest(ch) {
       ch.opened = true; ch.dead = true;
       const bonus = ch.supply ? 32 : 18;
-      state.gold += bonus + state.level * 3;
+      state.gold += Math.round((bonus + state.level * 3) * (1 + state.stats.goldBonus));
       if (ch.supply) {
         state.player.hp = Math.min(state.player.maxHp, state.player.hp + 34);
         state.stats.shield = Math.min(state.stats.shieldMax * 1.7, state.stats.shield + 32);
@@ -916,7 +1025,7 @@
       }
       state.waves.push({ x: ch.x, y: ch.y, r: 12, max: ch.supply ? 140 : 90, life: .45, color: ch.supply ? "#9eff9a" : "#ffd36b" });
       burst(ch.x, ch.y, ch.supply ? "#9eff9a" : "#ffd36b", ch.supply ? 46 : 28, ch.supply ? 300 : 220);
-      if (Math.random() < .75) {
+      if (Math.random() < (ch.supply ? .55 : .28)) {
         const u = UPGRADES[irand(0, UPGRADES.length - 1)];
         if ((state.stats.upgrades[u.id] || 0) < u.max) {
           state.stats.upgrades[u.id] = (state.stats.upgrades[u.id] || 0) + 1;
@@ -929,19 +1038,19 @@
 
     function finish(win) {
       state.gameOver = true; state.victory = win; state.phase = "result";
-      const souls = Math.round((state.kills / 12 + state.level * 2 + state.gold / 20) * (win ? 1.8 : 1));
-      state.meta.souls += souls; saveMeta(); localStorage.removeItem(SAVE);
+      const stardust = Math.round((state.kills / 12 + state.level * 2 + state.gold / 20) * (win ? 1.8 : 1));
+      state.meta.stardust += stardust; saveMeta(); localStorage.removeItem(SAVE);
       ui.resultTitle.textContent = win ? "智能体完成突围" : "作战终止";
-      ui.resultText.textContent = "存活 " + fmtTime(state.elapsed) + "，击败 " + state.kills + " 个敌人，获得魂晶 " + souls + "。AI 导演最终策略：" + state.director.mode + "。";
+      ui.resultText.textContent = "存活 " + fmtTime(state.elapsed) + "，击败 " + state.kills + " 个敌人，获得星尘 " + stardust + "。AI 导演最终策略：" + state.director.mode + "。";
       ui.resultScreen.classList.add("on");
     }
 
     function fireBullet(x, y, dx, dy, speed, damage, color, r, enemy, kind) {
       const l = Math.hypot(dx, dy) || 1;
-      const b = { x, y, vx: dx / l * speed, vy: dy / l * speed, damage, color, r, ttl: 2.2, kind, pierce: kind === "pulse" ? 0 : 1 };
+      const b = { x, y, vx: dx / l * speed, vy: dy / l * speed, damage, color, r, ttl: 2.2, kind, pierce: enemy ? 0 : (kind === "pulse" ? state.stats.pierce : 1 + state.stats.pierce) };
       (enemy ? state.enemyBullets : state.bullets).push(b);
     }
-    function rollDamage(base) { return base * state.stats.atk * (1 + state.stats.damage) * (Math.random() < state.stats.crit ? 1.8 : 1); }
+    function rollDamage(base) { return base * state.stats.atk * (1 + state.stats.damage) * (Math.random() < state.stats.crit ? 1 + state.stats.critDmg : 1); }
     function nearest(from, arr) { let best = null, bd = Infinity; for (const o of arr) { if (o.dead) continue; const d = Math.hypot(o.x - from.x, o.y - from.y); if (d < bd) { bd = d; best = o; } } return best || arr[0]; }
     function farTarget() { let best = null, bd = 0; for (const e of state.enemies) { const d = dist(e, state.player); if (!e.dead && d > bd) { bd = d; best = e; } } return best; }
     function chainHit(e, dmg, jumps) { let cur = e; const hit = new Set(); for (let i = 0; i < jumps && cur; i++) { hit.add(cur); damageEnemy(cur, dmg, state.player.x, state.player.y); burst(cur.x, cur.y, "#b58cff", 10, 160); cur = state.enemies.filter(x => !x.dead && !hit.has(x) && dist(x, cur) < 180).sort((a,b) => dist(a, cur)-dist(b, cur))[0]; } }
@@ -979,19 +1088,35 @@
 
     function drawArena() {
       const step = 96;
-      ctx.fillStyle = "#09101a"; ctx.fillRect(-ARENA/2, -ARENA/2, ARENA, ARENA);
+      const palettes = [
+        ["#09101a", "#0b1724", "#0a111b", "#7be8ff"],
+        ["#100d18", "#171028", "#0d1020", "#d46bff"],
+        ["#170d0b", "#24120d", "#120d0b", "#ff6969"],
+        ["#0d121b", "#15162b", "#0b1020", "#b58cff"],
+        ["#060b10", "#0c1d23", "#081016", "#7be8ff"]
+      ];
+      const pal = palettes[state.stageIndex % palettes.length];
+      ctx.fillStyle = pal[0]; ctx.fillRect(-ARENA/2, -ARENA/2, ARENA, ARENA);
       for (let x = -ARENA/2; x < ARENA/2; x += step) for (let y = -ARENA/2; y < ARENA/2; y += step) {
-        ctx.fillStyle = ((x/step + y/step) % 2 === 0) ? "#0b1420" : "#0a111b";
+        ctx.fillStyle = ((x/step + y/step) % 2 === 0) ? pal[1] : pal[2];
         ctx.fillRect(x, y, step, step);
-        ctx.strokeStyle = "rgba(123,232,255,.035)"; ctx.strokeRect(x+1, y+1, step-2, step-2);
-        if ((x * 7 + y * 3) % 5 === 0) { ctx.fillStyle = "rgba(255,255,255,.04)"; ctx.fillRect(x+16, y+20, 38, 3); ctx.fillRect(x+52, y+23, 3, 24); }
+        ctx.strokeStyle = "rgba(255,255,255,.045)"; ctx.strokeRect(x+1, y+1, step-2, step-2);
+        if ((x * 7 + y * 3 + state.stageIndex) % 5 === 0) {
+          ctx.fillStyle = "rgba(255,255,255,.045)";
+          ctx.fillRect(x+16, y+20, 38, 3); ctx.fillRect(x+52, y+23, 3, 24);
+          ctx.fillStyle = pal[3]; ctx.globalAlpha = .16; ctx.fillRect(x+18, y+62, 54, 4); ctx.globalAlpha = 1;
+        }
+        if ((x * 5 - y * 11) % 7 === 0) {
+          ctx.strokeStyle = "rgba(0,0,0,.22)"; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(x + 18, y + 76); ctx.lineTo(x + 45, y + 54); ctx.lineTo(x + 78, y + 64); ctx.stroke();
+        }
       }
       for (const s of state.bg) {
         ctx.globalAlpha = s.a + Math.sin(state.t * 2 + s.x) * .02;
         ctx.fillStyle = s.c; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
       }
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 10; ctx.strokeRect(-ARENA/2, -ARENA/2, ARENA, ARENA);
+      ctx.strokeStyle = pal[3]; ctx.globalAlpha = .22; ctx.lineWidth = 10; ctx.strokeRect(-ARENA/2, -ARENA/2, ARENA, ARENA); ctx.globalAlpha = 1;
     }
 
     function drawProp(p) {
@@ -1005,16 +1130,20 @@
       if (p.kind === "tower") {
         const pulse = .7 + Math.sin(state.t * 4 + p.pulse) * .3;
         ctx.shadowColor = "#7be8ff"; ctx.shadowBlur = 18 * pulse;
-        ctx.fillStyle = "#121826"; ctx.fillRect(p.x - 18, p.y - 44, 36, 82);
-        ctx.fillStyle = "#263b57"; ctx.fillRect(p.x - 14, p.y - 38, 28, 70);
-        ctx.fillStyle = "#7be8ff"; ctx.globalAlpha = .55 + pulse * .25; ctx.fillRect(p.x - 8, p.y - 28, 16, 44); ctx.globalAlpha = 1;
+        ctx.fillStyle = "#060b12"; ctx.beginPath(); ctx.roundRect(p.x - 23, p.y - 48, 46, 90, 8); ctx.fill();
+        ctx.fillStyle = "#162239"; ctx.beginPath(); ctx.roundRect(p.x - 18, p.y - 44, 36, 82, 7); ctx.fill();
+        ctx.fillStyle = "#2b4468"; ctx.fillRect(p.x - 13, p.y - 37, 26, 68);
+        ctx.fillStyle = "#7be8ff"; ctx.globalAlpha = .55 + pulse * .25; ctx.beginPath(); ctx.roundRect(p.x - 8, p.y - 28, 16, 44, 4); ctx.fill(); ctx.globalAlpha = 1;
+        ctx.fillStyle = "#dff8ff"; ctx.globalAlpha = .28; ctx.fillRect(p.x - 6, p.y - 25, 5, 38); ctx.globalAlpha = 1;
         ctx.strokeStyle = "rgba(123,232,255,.36)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y - 8, 46 + pulse * 8, 0, Math.PI * 2); ctx.stroke();
         ctx.shadowBlur = 0;
       } else {
-        ctx.fillStyle = "#10131b"; ctx.fillRect(p.x - p.w/2, p.y - p.h/2, p.w, p.h);
-        ctx.fillStyle = "#314052"; ctx.fillRect(p.x - p.w/2 + 5, p.y - p.h/2 + 5, p.w - 10, p.h - 10);
+        ctx.fillStyle = "#090c12"; ctx.beginPath(); ctx.roundRect(p.x - p.w/2, p.y - p.h/2, p.w, p.h, 8); ctx.fill();
+        ctx.fillStyle = "#263346"; ctx.beginPath(); ctx.roundRect(p.x - p.w/2 + 5, p.y - p.h/2 + 5, p.w - 10, p.h - 10, 6); ctx.fill();
+        ctx.fillStyle = "#43546d"; ctx.fillRect(p.x - p.w/2 + 10, p.y - p.h/2 + 12, p.w - 20, 7);
         ctx.fillStyle = "#7b8da6"; ctx.globalAlpha = .22; ctx.fillRect(p.x - p.w/2 + 8, p.y - p.h/2 + 8, p.w - 16, 5); ctx.globalAlpha = 1;
-        ctx.fillStyle = "#0a0d12"; ctx.fillRect(p.x - 4, p.y - p.h/2, 8, p.h);
+        ctx.fillStyle = "#0a0d12"; ctx.fillRect(p.x - 4, p.y - p.h/2 + 3, 8, p.h - 6);
+        ctx.strokeStyle = "rgba(255,255,255,.12)"; ctx.lineWidth = 2; ctx.strokeRect(p.x - p.w/2 + 6, p.y - p.h/2 + 6, p.w - 12, p.h - 12);
       }
       ctx.restore();
     }
@@ -1047,6 +1176,9 @@
       ctx.fillStyle = "#000";
       ctx.beginPath(); ctx.ellipse(0, 24, 31, 9, 0, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
+      ctx.strokeStyle = "rgba(255,255,255,.16)";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.roundRect(-23, -39, 55, 73, 12); ctx.stroke();
       if (p.inv > 0) {
         ctx.strokeStyle = "rgba(123,232,255,.82)";
         ctx.lineWidth = 3;
@@ -1084,6 +1216,9 @@
       ctx.beginPath(); ctx.roundRect(-17, -18, 34, 35, 8); ctx.fill();
       ctx.fillStyle = "#2d80cf";
       ctx.beginPath(); ctx.roundRect(-11, -16, 23, 31, 7); ctx.fill();
+      ctx.strokeStyle = "rgba(216,246,255,.38)";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(-11, -16, 23, 31, 7); ctx.stroke();
       ctx.fillStyle = "#0b1627";
       ctx.beginPath(); ctx.roundRect(-17, -1, 35, 8, 3); ctx.fill();
       ctx.fillStyle = "#aeeaff";
@@ -1094,6 +1229,7 @@
       ctx.shadowColor = "#7be8ff";
       ctx.shadowBlur = 12;
       ctx.beginPath(); ctx.arc(1, -3, 7 + Math.sin(state.t * 8) * 1.2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#ffffff"; ctx.globalAlpha = .55; ctx.beginPath(); ctx.arc(-2, -6, 2.2, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
 
       ctx.fillStyle = "#0c1420";
@@ -1196,6 +1332,8 @@
         ctx.strokeStyle = "#ffd36b";
         ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.arc(0, 0, 25 + Math.sin(state.t * 7) * 2, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = "#ffd36b";
+        ctx.beginPath(); ctx.moveTo(0, -36); ctx.lineTo(7, -24); ctx.lineTo(0, -28); ctx.lineTo(-7, -24); ctx.closePath(); ctx.fill();
       }
 
       if (e.type === "seeker") {
@@ -1287,6 +1425,8 @@
       ctx.restore();
 
       ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,.65)";
+      ctx.fillRect(e.x - e.r - 2, e.y - e.r - 15, e.r * 2 + 4, 9);
       ctx.fillStyle = "#2a1010";
       ctx.fillRect(e.x - e.r, e.y - e.r - 13, e.r * 2, 5);
       ctx.fillStyle = e.elite ? "#ffd36b" : "#ff6969";
@@ -1462,7 +1602,7 @@
       const stage = currentStage(), wave = currentWave();
       const goalText = wave?.boss ? (state.boss ? "击败 " + state.boss.name : "Boss 即将出现") : "目标 " + state.waveKills + "/" + (wave?.goal || 0);
       ui.runTitle.textContent = "第" + (state.stageIndex + 1) + "章 " + (stage?.name || "终局") + "  |  " + (wave?.name || "突围") + "  |  " + goalText;
-      ui.runSub.textContent = fmtTime(state.elapsed) + " | 敌人 " + state.enemies.length + " | 连击 " + state.combo + " | AI超频 " + Math.floor(state.overdrive) + "% | 队友：" + state.ally.mode;
+      ui.runSub.textContent = fmtTime(state.elapsed) + " | 敌人 " + state.enemies.length + " | 连击 " + state.combo + " | 机动同步 " + Math.round(state.focus * 100) + "% | AI超频 " + Math.floor(state.overdrive) + "%";
       ui.aiMode.textContent = d.mode;
       ui.threatText.textContent = Math.round(d.threat * 100) + "%";
       ui.tempoText.textContent = Math.round(d.tempo * 100) + "%";
@@ -1487,16 +1627,23 @@
         const lv = state.meta[id] || 0, cost = 8 + lv * 6;
         const div = document.createElement("div");
         div.className = "choice";
-        div.innerHTML = "<strong>" + name + " Lv." + lv + "</strong><span>消耗 " + cost + " 魂晶升级。当前魂晶：" + state.meta.souls + "</span>";
-        div.onclick = () => { if (state.meta.souls >= cost) { state.meta.souls -= cost; state.meta[id] = lv + 1; saveMeta(); renderMenu(); } };
+        div.innerHTML = "<strong>" + name + " Lv." + lv + "</strong><span>消耗 " + cost + " 星尘升级。当前星尘：" + state.meta.stardust + "</span>";
+        div.onclick = () => { if (state.meta.stardust >= cost) { state.meta.stardust -= cost; state.meta[id] = lv + 1; saveMeta(); renderMenu(); } };
         ui.metaBox.appendChild(div);
       });
     }
 
     function saveMeta() { localStorage.setItem(META, JSON.stringify(state.meta)); }
-    function loadMeta() { try { state.meta = Object.assign(state.meta, JSON.parse(localStorage.getItem(META) || "{}")); } catch(_) {} }
+    function loadMeta() {
+      try {
+        const old = JSON.parse(localStorage.getItem(META) || "{}");
+        if (old.souls && !old.stardust) old.stardust = old.souls;
+        state.meta = Object.assign(state.meta, old);
+        delete state.meta.souls;
+      } catch(_) {}
+    }
     function saveGame() {
-      if (state.phase !== "running" || !state.player) return;
+      if ((state.phase !== "running" && state.phase !== "shop") || !state.player) return;
       localStorage.setItem(SAVE, JSON.stringify({ hero: state.stats.heroId, elapsed: state.elapsed, kills: state.kills, gold: state.gold, level: state.level, xpNeed: state.xpNeed, xpValue: state.xpValue, hp: state.player.hp, stats: state.stats, stageIndex: state.stageIndex, waveIndex: state.waveIndex, waveKills: state.waveKills }));
     }
     function loadGame() { try { const d = JSON.parse(localStorage.getItem(SAVE) || "null"); if (!d) return false; state.selectedHero = d.hero || state.selectedHero; resetRun(d); return true; } catch(_) { return false; } }
@@ -1506,9 +1653,15 @@
       addEventListener("keyup", e => keys.delete(e.code));
       ui.startBtn.onclick = () => resetRun();
       ui.continueBtn.onclick = () => { if (!loadGame()) showToast("没有可继续的存档"); };
-      ui.clearBtn.onclick = () => { localStorage.removeItem(SAVE); localStorage.removeItem(META); state.meta = { souls: 0, power: 0, guard: 0, economy: 0 }; saveMeta(); renderMenu(); showToast("存档已清除"); };
+      ui.clearBtn.onclick = () => { localStorage.removeItem(SAVE); localStorage.removeItem(META); state.meta = { stardust: 0, power: 0, guard: 0, economy: 0 }; saveMeta(); renderMenu(); showToast("存档已清除"); };
       ui.againBtn.onclick = () => { ui.resultScreen.classList.remove("on"); resetRun(); };
       ui.backMenuBtn.onclick = () => { ui.resultScreen.classList.remove("on"); ui.menuScreen.classList.add("on"); state.phase = "menu"; renderMenu(); };
+      ui.rerollShopBtn.onclick = () => {
+        const cost = 10 + state.shopRerolls * 8 + state.stageIndex * 3;
+        if (state.gold < cost) return showToast("刷新需要 " + cost + " 金币");
+        state.gold -= cost; state.shopRerolls++; rollShop(); showToast("商店已刷新");
+      };
+      ui.leaveShopBtn.onclick = () => closeShop();
       ui.dashBtn.addEventListener("pointerdown", e => { e.preventDefault(); dash(); });
       ui.magnetBtn.addEventListener("pointerdown", e => { e.preventDefault(); collectPulse(); });
       ui.stick.addEventListener("pointerdown", e => {
