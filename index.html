@@ -673,7 +673,7 @@
     function updateEnemies(dt) {
       const p = state.player;
       for (const e of state.enemies) {
-        if (e.dead) continue;
+        if (e.dead || e.retreat) continue;
         e.cd -= dt; e.special -= dt;
         e.guard = Math.max(0, (e.guard || 0) - dt * .55);
         e.marked = Math.max(0, (e.marked || 0) - dt);
@@ -772,7 +772,7 @@
         }
       }
       state.mines = state.mines.filter(m => m.ttl > 0 && !m.dead);
-      state.enemies = state.enemies.filter(e => !e.dead);
+      state.enemies = state.enemies.filter(e => !e.dead && !e.retreat);
       if (state.boss && state.boss.dead) state.boss = null;
     }
 
@@ -803,7 +803,7 @@
       state.hazards = state.hazards.filter(h => h.life > 0);
       for (const p of state.props) {
         if (p.kind === "tower" && Math.hypot(state.player.x - p.x, state.player.y - p.y) < 88) {
-          state.overdrive = Math.min(100, state.overdrive + 8 * dt);
+          state.overdrive = Math.min(100, state.overdrive + 1.1 * dt);
           if (Math.random() < .08) state.particles.push({ x: p.x + rand(-18, 18), y: p.y + rand(-24, 8), vx: rand(-20,20), vy: rand(-80,-20), life: .5, color: "#7be8ff", size: rand(2,5) });
         }
       }
@@ -962,10 +962,10 @@
       state.stageClearCd = 1.8;
       state.spawnCd = 99;
       state.gold += 8 + state.stageIndex * 4 + state.waveIndex * 3;
-      state.overdrive = Math.min(100, state.overdrive + 18);
+      state.overdrive = Math.min(100, state.overdrive + 6);
       state.chests.push({ x: state.player.x + rand(-90, 90), y: state.player.y + rand(-90, 90), r: 19, opened: false, supply: state.waveIndex >= 2 });
       state.waves.push({ x: state.player.x, y: state.player.y, r: 18, max: 240, life: .55, color: "#ffd36b" });
-      for (const e of state.enemies) if (!e.dead && e.type !== "boss") damageEnemy(e, 999, state.player.x, state.player.y);
+      for (const e of state.enemies) if (!e.dead && e.type !== "boss") e.retreat = true;
       showToast("轮次完成：获得宝箱与金币", 1.5);
     }
     function advanceWave() {
@@ -1032,7 +1032,7 @@
     function updateCombatTempo(dt) {
       state.comboTimer = Math.max(0, state.comboTimer - dt);
       if (state.comboTimer <= 0) state.combo = 0;
-      state.overdrive = Math.min(100, state.overdrive + dt * (state.director.tempo > .55 ? 3 : 1));
+      state.overdrive = Math.min(100, state.overdrive + dt * (state.director.tempo > .55 ? .55 : .25));
       for (const w of state.waves) { w.life -= dt; w.r += (w.max - w.r) * 7 * dt; }
       for (const tr of state.trails) { tr.life -= dt; tr.r *= Math.pow(.35, dt); }
       state.waves = state.waves.filter(w => w.life > 0);
@@ -1065,21 +1065,21 @@
       state.shake = .16;
       state.waves.push({ x: state.player.x, y: state.player.y, r: 20, max: 520, life: .7, color: "#fff4c8" });
       showToast("AI 超频：战术干扰", 1.6);
-      state.enemyBullets = state.enemyBullets.filter(b => Math.hypot((b.x || 0) - state.player.x, (b.y || 0) - state.player.y) > 520);
+      state.enemyBullets = state.enemyBullets.filter(b => Math.hypot((b.x || 0) - state.player.x, (b.y || 0) - state.player.y) > 300);
       for (const e of state.enemies) {
-        if (!e.dead && dist(e, state.player) < 520) {
-          e.marked = Math.max(e.marked || 0, 4.2);
-          e.slow = Math.max(e.slow || 0, 1.1);
+        if (!e.dead && dist(e, state.player) < 340) {
+          e.marked = Math.max(e.marked || 0, 1.35);
+          e.slow = Math.max(e.slow || 0, .34);
         }
       }
-      state.stats.shield = Math.min(state.stats.shieldMax * 1.5, state.stats.shield + 18 + state.stats.drone * 3);
-      burst(state.player.x, state.player.y, "#fff4c8", 38, 260);
+      state.stats.shield = Math.min(state.stats.shieldMax * 1.22, state.stats.shield + 8 + state.stats.drone * 1.2);
+      burst(state.player.x, state.player.y, "#fff4c8", 22, 180);
     }
 
     function damageEnemy(e, amount, x, y, source = "player") {
       const crit = amount > 24 && Math.random() < state.stats.crit * .55;
       if (crit) amount *= 1.35;
-      if (source !== "ally" && e.marked > 0) amount *= 1.18;
+      if (source !== "ally" && e.marked > 0) amount *= 1.06;
       if (e.guard) amount *= Math.max(.45, 1 - e.guard);
       e.hp -= amount;
       e.vx += (e.x - x) * .8; e.vy += (e.y - y) * .8;
@@ -1088,7 +1088,7 @@
       if (e.hp <= 0 && !e.dead) {
         e.dead = true; state.kills++; state.director.killWindow += 1;
         state.waveKills += e.type === "boss" ? 0 : 1;
-        state.combo++; state.comboTimer = 3.2; state.overdrive = Math.min(100, state.overdrive + (e.elite ? 8 : e.type === "boss" ? 22 : 2.2));
+        state.combo++; state.comboTimer = 3.2; state.overdrive = Math.min(100, state.overdrive + (e.elite ? 2.4 : e.type === "boss" ? 8 : .45));
         const value = Math.max(1, Math.round(e.value || 3));
         state.xp.push({ x: e.x, y: e.y, r: 8, value, color: e.elite || e.type === "boss" ? "#ffd36b" : "#7be8ff", vx: rand(-40,40), vy: rand(-40,40) });
         if (state.combo > 20 && state.combo % 10 === 0) { state.gold += 3; showText(e.x, e.y - 28, "连击+" + state.combo, "#ffd36b", 16); }
@@ -1164,7 +1164,7 @@
       if (ch.supply) {
         state.player.hp = Math.min(state.player.maxHp, state.player.hp + 34);
         state.stats.shield = Math.min(state.stats.shieldMax * 1.7, state.stats.shield + 32);
-        state.overdrive = Math.min(100, state.overdrive + 28);
+        state.overdrive = Math.min(100, state.overdrive + 8);
         showText(ch.x, ch.y - 30, "AI补给", "#9eff9a", 18);
       }
       state.waves.push({ x: ch.x, y: ch.y, r: 12, max: ch.supply ? 140 : 90, life: .45, color: ch.supply ? "#9eff9a" : "#ffd36b" });
@@ -1882,7 +1882,7 @@
       if (state.gold >= 12) {
         state.gold -= 12;
         state.stats.shield = Math.min(state.stats.shieldMax * 1.8, state.stats.shield + 26);
-        state.overdrive = Math.min(100, state.overdrive + 12);
+        state.overdrive = Math.min(100, state.overdrive + 4);
         state.waves.push({ x: state.player.x, y: state.player.y, r: 18, max: 180, life: .5, color: "#ffd36b" });
         showText(state.player.x, state.player.y - 36, "AI护盾脉冲", "#ffd36b", 16);
       }
