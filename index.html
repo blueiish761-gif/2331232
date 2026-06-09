@@ -673,7 +673,7 @@
     function updateEnemies(dt) {
       const p = state.player;
       for (const e of state.enemies) {
-        if (e.dead || e.retreat) continue;
+        if (e.dead) continue;
         e.cd -= dt; e.special -= dt;
         e.guard = Math.max(0, (e.guard || 0) - dt * .55);
         e.marked = Math.max(0, (e.marked || 0) - dt);
@@ -772,7 +772,7 @@
         }
       }
       state.mines = state.mines.filter(m => m.ttl > 0 && !m.dead);
-      state.enemies = state.enemies.filter(e => !e.dead && !e.retreat);
+      state.enemies = state.enemies.filter(e => !e.dead);
       if (state.boss && state.boss.dead) state.boss = null;
     }
 
@@ -938,7 +938,8 @@
         state.supplyCd = rand(26, 38);
         wave.supply = false;
       }
-      if (state.waveKills >= wave.goal || state.waveTimer >= wave.duration) completeWave();
+      const activeEnemies = state.enemies.filter(e => !e.dead && e.type !== "boss").length;
+      if (state.waveKills >= wave.goal && activeEnemies === 0) completeWave();
     }
 
     function currentStage() { return STAGES[Math.min(state.stageIndex, STAGES.length - 1)]; }
@@ -959,14 +960,13 @@
     }
     function completeWave() {
       if (state.stageClearCd > 0) return;
-      state.stageClearCd = 1.8;
+      state.stageClearCd = 3.2;
       state.spawnCd = 99;
       state.gold += 8 + state.stageIndex * 4 + state.waveIndex * 3;
       state.overdrive = Math.min(100, state.overdrive + 6);
       state.chests.push({ x: state.player.x + rand(-90, 90), y: state.player.y + rand(-90, 90), r: 19, opened: false, supply: state.waveIndex >= 2 });
       state.waves.push({ x: state.player.x, y: state.player.y, r: 18, max: 240, life: .55, color: "#ffd36b" });
-      for (const e of state.enemies) if (!e.dead && e.type !== "boss") e.retreat = true;
-      showToast("轮次完成：获得宝箱与金币", 1.5);
+      showToast("轮次完成：3 秒后进入下一段", 2.2);
     }
     function advanceWave() {
       const wasBoss = currentWave()?.boss;
@@ -1037,7 +1037,7 @@
       for (const tr of state.trails) { tr.life -= dt; tr.r *= Math.pow(.35, dt); }
       state.waves = state.waves.filter(w => w.life > 0);
       state.trails = state.trails.filter(t => t.life > 0);
-      if (state.overdrive >= 100 && state.enemies.length > 24) aiOverdrive();
+      if (state.overdrive >= 100 && state.player.hp / state.player.maxHp < .42 && state.enemyBullets.length >= 8) aiOverdrive();
     }
 
     function updatePressureEvents(dt) {
@@ -1066,12 +1066,6 @@
       state.waves.push({ x: state.player.x, y: state.player.y, r: 20, max: 520, life: .7, color: "#fff4c8" });
       showToast("AI 超频：战术干扰", 1.6);
       state.enemyBullets = state.enemyBullets.filter(b => Math.hypot((b.x || 0) - state.player.x, (b.y || 0) - state.player.y) > 300);
-      for (const e of state.enemies) {
-        if (!e.dead && dist(e, state.player) < 340) {
-          e.marked = Math.max(e.marked || 0, 1.35);
-          e.slow = Math.max(e.slow || 0, .34);
-        }
-      }
       state.stats.shield = Math.min(state.stats.shieldMax * 1.22, state.stats.shield + 8 + state.stats.drone * 1.2);
       burst(state.player.x, state.player.y, "#fff4c8", 22, 180);
     }
@@ -1097,7 +1091,7 @@
         if (state.stats.vamp) state.player.hp = Math.min(state.player.maxHp, state.player.hp + state.player.maxHp * state.stats.vamp);
         state.waves.push({ x: e.x, y: e.y, r: 8, max: e.elite || e.type === "boss" ? 92 : 42, life: e.elite || e.type === "boss" ? .42 : .22, color: e.color });
         burst(e.x, e.y, e.elite ? "#ffd36b" : e.color, e.elite ? 34 : 14, e.elite ? 260 : 150);
-        if (e.type === "boss") completeWave();
+        if (e.type === "boss" && currentWave()?.boss) completeWave();
       }
     }
 
@@ -1787,7 +1781,9 @@
       ui.xpText.textContent = "Lv." + state.level + "  " + state.kills + "击败";
       ui.xpFill.style.width = clamp(state.xpValue / state.xpNeed * 100, 0, 100) + "%";
       const stage = currentStage(), wave = currentWave();
-      const goalText = wave?.boss ? (state.boss ? "击败 " + state.boss.name : "Boss 即将出现") : "目标 " + state.waveKills + "/" + (wave?.goal || 0);
+      const activeEnemies = state.enemies.filter(e => !e.dead && e.type !== "boss").length;
+      const clearText = state.stageClearCd > 0 ? "下一段 " + Math.ceil(state.stageClearCd) + "秒" : "";
+      const goalText = clearText || (wave?.boss ? (state.boss ? "击败 " + state.boss.name : "Boss 即将出现") : "目标 " + state.waveKills + "/" + (wave?.goal || 0) + "  清场 " + activeEnemies);
       ui.runTitle.textContent = "第" + (state.stageIndex + 1) + "章 " + (stage?.name || "终局") + "  |  " + (wave?.name || "突围") + "  |  " + goalText;
       ui.runSub.textContent = fmtTime(state.elapsed) + " | 敌人 " + state.enemies.length + " | 连击 " + state.combo + " | 机动同步 " + Math.round(state.focus * 100) + "% | AI超频 " + Math.floor(state.overdrive) + "%";
       ui.aiMode.textContent = d.mode;
