@@ -249,7 +249,41 @@
     const BOSSES = [
       { name: "蜂群监督者", hp: 860, color: "#ff7bbb", mode: "swarm" },
       { name: "裂变审判机", hp: 1280, color: "#ffd36b", mode: "split" },
-      { name: "终局智能体", hp: 1850, color: "#7be8ff", mode: "all" }
+      { name: "熔炉暴君", hp: 1680, color: "#ff6969", mode: "charge" },
+      { name: "棱镜巫王", hp: 2050, color: "#b58cff", mode: "beam" },
+      { name: "终局智能体", hp: 2600, color: "#7be8ff", mode: "all" }
+    ];
+    const STAGES = [
+      { name: "废城外环", rule: "小怪试炼", boss: 0, waves: [
+        { name: "侦察群", goal: 18, duration: 26, types: ["seeker"], pack: [2, 4], elite: false },
+        { name: "交叉火力", goal: 28, duration: 34, types: ["seeker", "ranger"], pack: [3, 5], elite: false },
+        { name: "精英破门", goal: 2, duration: 32, types: ["charger"], pack: [1, 2], elite: true },
+        { name: "Boss 战", boss: true }
+      ]},
+      { name: "裂隙矿井", rule: "宝箱与爆破", boss: 1, waves: [
+        { name: "分裂孢潮", goal: 30, duration: 34, types: ["splitter", "seeker"], pack: [3, 6], elite: false },
+        { name: "矿井伏击", goal: 36, duration: 38, types: ["ranger", "splitter", "charger"], pack: [3, 6], elite: false, supply: true },
+        { name: "重甲搬运者", goal: 3, duration: 36, types: ["tank", "splitter"], pack: [1, 2], elite: true },
+        { name: "Boss 战", boss: true }
+      ]},
+      { name: "熔炉兵站", rule: "冲锋与尖刺", boss: 2, waves: [
+        { name: "冲锋走廊", goal: 38, duration: 38, types: ["charger", "seeker"], pack: [4, 7], elite: false },
+        { name: "重甲推进", goal: 42, duration: 42, types: ["tank", "charger", "ranger"], pack: [3, 6], elite: false },
+        { name: "熔炉队长", goal: 4, duration: 40, types: ["tank", "charger"], pack: [1, 2], elite: true },
+        { name: "Boss 战", boss: true }
+      ]},
+      { name: "棱镜圣堂", rule: "弹幕与远程", boss: 3, waves: [
+        { name: "箭雨阵列", goal: 44, duration: 42, types: ["ranger", "splitter"], pack: [4, 7], elite: false },
+        { name: "折射包围", goal: 48, duration: 46, types: ["ranger", "seeker", "splitter"], pack: [5, 8], elite: false, supply: true },
+        { name: "棱镜精英", goal: 4, duration: 42, types: ["ranger", "tank"], pack: [1, 2], elite: true },
+        { name: "Boss 战", boss: true }
+      ]},
+      { name: "终局核心", rule: "全类型混战", boss: 4, waves: [
+        { name: "核心防线", goal: 52, duration: 48, types: ["seeker", "ranger", "charger", "splitter"], pack: [5, 9], elite: false },
+        { name: "算法暴走", goal: 60, duration: 52, types: ["seeker", "ranger", "charger", "tank", "splitter"], pack: [6, 10], elite: false },
+        { name: "最终精英团", goal: 5, duration: 48, types: ["tank", "charger", "ranger"], pack: [2, 3], elite: true },
+        { name: "最终 Boss", boss: true }
+      ]}
     ];
 
     const state = {
@@ -259,6 +293,7 @@
       enemies: [], bullets: [], enemyBullets: [], xp: [], coins: [], particles: [], texts: [], mines: [], chests: [], props: [], hazards: [],
       boss: null, elapsed: 0, kills: 0, gold: 0, level: 1, xpNeed: 18, xpValue: 0,
       spawnCd: 0, eliteCd: 24, bossIndex: -1, toastUntil: 0, toastText: "", pausedForUpgrade: false,
+      stageIndex: 0, waveIndex: 0, waveKills: 0, waveTimer: 0, waveStarted: false, stageClearCd: 0,
       gameOver: false, victory: false, shake: 0, bg: [], waves: [], trails: [],
       combo: 0, comboTimer: 0, overdrive: 0, supplyCd: 18
     };
@@ -298,10 +333,13 @@
       state.director = { threat: 0, tempo: 0, mercy: 0, pressure: 0, mode: "观察玩家", hurtWindow: 0, killWindow: 0, lastHp: state.player.hp, tick: 0 };
       Object.assign(state, { enemies: [], bullets: [], enemyBullets: [], xp: [], coins: [], particles: [], texts: [], mines: [], chests: [], props: [], hazards: [], boss: null, waves: [], trails: [],
         elapsed: 0, kills: 0, gold: 0, level: 1, xpNeed: 18, xpValue: 0, spawnCd: .8, eliteCd: 22, bossIndex: -1, phase: "running", gameOver: false, victory: false, pausedForUpgrade: false, shake: 0,
+        stageIndex: 0, waveIndex: 0, waveKills: 0, waveTimer: 0, waveStarted: false, stageClearCd: 0,
         combo: 0, comboTimer: 0, overdrive: 0, supplyCd: 16 });
       if (loadData) {
         state.elapsed = loadData.elapsed || 0; state.kills = loadData.kills || 0; state.gold = loadData.gold || 0;
         state.level = loadData.level || 1; state.xpNeed = loadData.xpNeed || 18; state.xpValue = loadData.xpValue || 0;
+        state.stageIndex = loadData.stageIndex || 0; state.waveIndex = loadData.waveIndex || 0; state.waveKills = loadData.waveKills || 0;
+        state.waveStarted = false; state.stageClearCd = 0;
         state.stats = Object.assign(state.stats, loadData.stats || {});
         state.stats.upgrades = Object.assign(makeRunStats(hero.id).upgrades, loadData.stats?.upgrades || {});
         state.player.hp = Math.min(state.stats.maxHp, loadData.hp || state.stats.maxHp);
@@ -352,15 +390,17 @@
 
     function spawnBoss() {
       if (state.boss) return;
-      state.bossIndex++;
-      const def = BOSSES[Math.min(state.bossIndex, BOSSES.length - 1)];
+      const stage = currentStage();
+      state.bossIndex = stage.boss;
+      const def = BOSSES[Math.min(stage.boss, BOSSES.length - 1)];
       const angle = rand(0, Math.PI * 2);
       const x = state.player.x + Math.cos(angle) * 620;
       const y = state.player.y + Math.sin(angle) * 620;
-      state.boss = { type: "boss", name: def.name, mode: def.mode, x, y, vx: 0, vy: 0, r: 46, hp: def.hp * (1 + state.bossIndex * .35), maxHp: def.hp * (1 + state.bossIndex * .35), speed: 72 + state.bossIndex * 8, color: def.color, cd: 1.6, special: 2.6, phase: 1, value: 80 };
+      const scale = 1 + state.stageIndex * .28;
+      state.boss = { type: "boss", name: def.name, mode: def.mode, x, y, vx: 0, vy: 0, r: 46, hp: def.hp * scale, maxHp: def.hp * scale, speed: 72 + state.stageIndex * 8, color: def.color, cd: 1.6, special: 2.6, phase: 1, value: 80 + state.stageIndex * 24 };
       state.enemies.push(state.boss);
       state.shake = .35;
-      showToast("Boss 出现：" + def.name, 2.2);
+      showToast("第 " + (state.stageIndex + 1) + " 章 Boss：" + def.name, 2.2);
     }
 
     function inputVector() {
@@ -388,7 +428,6 @@
       updateParticles(dt);
       updateSpawns(dt);
       updateCombatTempo(dt);
-      if (state.elapsed > 480 && !state.victory && state.bossIndex >= 2 && !state.boss) finish(true);
       state.cam.x = clamp(state.player.x - state.w / state.scale / 2, -ARENA/2, ARENA/2 - state.w / state.scale);
       state.cam.y = clamp(state.player.y - state.h / state.scale / 2, -ARENA/2, ARENA/2 - state.h / state.scale);
       state.shake = Math.max(0, state.shake - dt);
@@ -599,6 +638,23 @@
           fireBullet(e.x, e.y, Math.cos(a), Math.sin(a), 210 + e.phase * 25, 13 + e.phase * 4, e.color, 6, true, "enemy");
         }
       }
+      if (e.mode === "charge" || e.mode === "all") {
+        const p = state.player, a = Math.atan2(p.y - e.y, p.x - e.x);
+        warnLine(e.x, e.y, a);
+        e.vx += Math.cos(a) * (760 + e.phase * 130);
+        e.vy += Math.sin(a) * (760 + e.phase * 130);
+        for (let i = 0; i < 4 + e.phase; i++) spawnEnemy(Math.random() < .5 ? "charger" : "tank", i === 0 && e.phase >= 2, false);
+        state.hazards.push({ x: clamp(p.x + rand(-120, 120), -ARENA/2 + 160, ARENA/2 - 160), y: clamp(p.y + rand(-120, 120), -ARENA/2 + 160, ARENA/2 - 160), r: rand(34, 54), timer: 2.4, active: false });
+      }
+      if (e.mode === "beam" || e.mode === "all") {
+        const p = state.player, base = Math.atan2(p.y - e.y, p.x - e.x);
+        for (let i = -1; i <= 1; i++) {
+          const a = base + i * .34;
+          warnLine(e.x, e.y, a);
+          state.enemyBullets.push({ x: e.x, y: e.y, vx: 0, vy: 0, r: 0, damage: 18 + e.phase * 8, ttl: .22, color: e.color, laser: true, tx: e.x + Math.cos(a) * 900, ty: e.y + Math.sin(a) * 900, pierce: 1 });
+        }
+        for (let i = 0; i < 3 + e.phase; i++) spawnEnemy(Math.random() < .65 ? "ranger" : "splitter", false, false);
+      }
       state.shake = .18;
       burst(e.x, e.y, e.color, 32, 260);
     }
@@ -663,29 +719,85 @@
     }
 
     function updateSpawns(dt) {
-      if (state.boss) return;
-      state.spawnCd -= dt; state.eliteCd -= dt; state.supplyCd -= dt;
+      if (state.stageClearCd > 0) {
+        state.stageClearCd -= dt;
+        if (state.stageClearCd <= 0) advanceWave();
+        return;
+      }
+      const wave = currentWave();
+      if (!wave) return finish(true);
+      if (!state.waveStarted) startWave();
+      state.waveTimer += dt;
+      state.supplyCd -= dt;
+      if (wave.boss) {
+        if (!state.boss && !state.waveStartedBoss) { state.waveStartedBoss = true; spawnBoss(); }
+        return;
+      }
+
+      state.spawnCd -= dt; state.eliteCd -= dt;
       const d = state.director;
-      let rate = d.mode === "高压围攻" ? .42 : d.mode === "救援补给" ? 1.15 : d.mode === "推进节奏" ? .7 : .86;
-      rate = Math.max(.18, rate - state.elapsed / 700);
-      if (state.spawnCd <= 0) {
-        const pack = d.mode === "高压围攻" ? irand(4, 7) : irand(2, 4);
-        for (let i = 0; i < pack; i++) {
-          const roll = Math.random();
-          const type = state.elapsed < 60 ? "seeker" : roll < .35 ? "seeker" : roll < .55 ? "ranger" : roll < .73 ? "charger" : roll < .88 ? "splitter" : "tank";
-          spawnEnemy(type);
-        }
+      let rate = d.mode === "高压围攻" ? .42 : d.mode === "救援补给" ? 1.08 : d.mode === "推进节奏" ? .65 : .82;
+      rate = Math.max(.18, rate - state.stageIndex * .055 - state.waveIndex * .025);
+      if (state.spawnCd <= 0 && state.waveKills < wave.goal) {
+        const packMin = wave.pack?.[0] || 2, packMax = wave.pack?.[1] || 4;
+        const pack = d.mode === "高压围攻" ? irand(packMax, packMax + 2) : irand(packMin, packMax);
+        for (let i = 0; i < pack; i++) spawnEnemy(wave.types[irand(0, wave.types.length - 1)], !!wave.elite, false);
         state.spawnCd = rate;
       }
-      if (state.eliteCd <= 0) {
-        spawnEnemy(Math.random() < .5 ? "tank" : "charger", true);
-        state.eliteCd = Math.max(12, 26 - state.elapsed / 30);
+      if (!wave.elite && state.eliteCd <= 0 && state.waveIndex >= 1) {
+        spawnEnemy(wave.types[irand(0, wave.types.length - 1)], true, false);
+        state.eliteCd = Math.max(12, 28 - state.stageIndex * 3 - state.waveIndex * 2);
       }
-      if (state.supplyCd <= 0) {
+      if ((wave.supply || state.supplyCd <= 0) && state.waveTimer > 8) {
         spawnSupply();
-        state.supplyCd = rand(24, 34);
+        state.supplyCd = rand(26, 38);
+        wave.supply = false;
       }
-      if ((state.elapsed > 110 && state.bossIndex < 0) || (state.elapsed > 250 && state.bossIndex < 1) || (state.elapsed > 390 && state.bossIndex < 2)) spawnBoss();
+      if (state.waveKills >= wave.goal || state.waveTimer >= wave.duration) completeWave();
+    }
+
+    function currentStage() { return STAGES[Math.min(state.stageIndex, STAGES.length - 1)]; }
+    function currentWave() {
+      const stage = STAGES[state.stageIndex];
+      return stage ? stage.waves[state.waveIndex] : null;
+    }
+    function startWave() {
+      const stage = currentStage(), wave = currentWave();
+      state.waveStarted = true; state.waveStartedBoss = false; state.waveKills = 0; state.waveTimer = 0;
+      state.spawnCd = .35; state.eliteCd = wave.elite ? .2 : 18; state.supplyCd = wave.supply ? 7 : rand(24, 34);
+      if (state.waveIndex === 0) {
+        makeBackground(); spawnArenaObjects();
+        showToast("进入第 " + (state.stageIndex + 1) + " 章：" + stage.name + " - " + stage.rule, 2.4);
+      } else {
+        showToast("第 " + (state.stageIndex + 1) + " 章 / 第 " + (state.waveIndex + 1) + " 轮：" + wave.name, 1.8);
+      }
+    }
+    function completeWave() {
+      if (state.stageClearCd > 0) return;
+      state.stageClearCd = 1.8;
+      state.spawnCd = 99;
+      state.gold += 8 + state.stageIndex * 4 + state.waveIndex * 3;
+      state.overdrive = Math.min(100, state.overdrive + 18);
+      state.chests.push({ x: state.player.x + rand(-90, 90), y: state.player.y + rand(-90, 90), r: 19, opened: false, supply: state.waveIndex >= 2 });
+      state.waves.push({ x: state.player.x, y: state.player.y, r: 18, max: 240, life: .55, color: "#ffd36b" });
+      for (const e of state.enemies) if (!e.dead && e.type !== "boss") damageEnemy(e, 999, state.player.x, state.player.y);
+      showToast("轮次完成：获得宝箱与金币", 1.5);
+    }
+    function advanceWave() {
+      const wasBoss = currentWave()?.boss;
+      state.waveIndex++;
+      state.waveStarted = false;
+      state.waveStartedBoss = false;
+      state.stageClearCd = 0;
+      if (wasBoss) {
+        state.stageIndex++;
+        state.waveIndex = 0;
+        state.player.hp = Math.min(state.player.maxHp, state.player.hp + 28 + state.stageIndex * 8);
+        state.stats.shield = Math.min(state.stats.shieldMax * 1.8, state.stats.shield + 36);
+        state.chests.push({ x: state.player.x + 70, y: state.player.y, r: 22, opened: false, supply: true });
+        if (state.stageIndex >= STAGES.length) return finish(true);
+        showToast("章节突破！准备进入：" + currentStage().name, 2.2);
+      }
     }
 
     function updateCombatTempo(dt) {
@@ -725,6 +837,7 @@
       burst(e.x, e.y, e.color, crit ? 8 : 3, crit ? 130 : 70);
       if (e.hp <= 0 && !e.dead) {
         e.dead = true; state.kills++; state.director.killWindow += 1;
+        state.waveKills += e.type === "boss" ? 0 : 1;
         state.combo++; state.comboTimer = 3.2; state.overdrive = Math.min(100, state.overdrive + (e.elite ? 8 : e.type === "boss" ? 22 : 2.2));
         const value = Math.max(1, Math.round(e.value || 3));
         state.xp.push({ x: e.x, y: e.y, r: 8, value, color: e.elite || e.type === "boss" ? "#ffd36b" : "#7be8ff", vx: rand(-40,40), vy: rand(-40,40) });
@@ -734,6 +847,7 @@
         if (state.stats.vamp) state.player.hp = Math.min(state.player.maxHp, state.player.hp + state.player.maxHp * state.stats.vamp);
         state.waves.push({ x: e.x, y: e.y, r: 8, max: e.elite || e.type === "boss" ? 92 : 42, life: e.elite || e.type === "boss" ? .42 : .22, color: e.color });
         burst(e.x, e.y, e.elite ? "#ffd36b" : e.color, e.elite ? 34 : 14, e.elite ? 260 : 150);
+        if (e.type === "boss") completeWave();
       }
     }
 
@@ -1345,8 +1459,10 @@
       ui.spFill.style.width = (s.dashCd > 0 ? (1 - s.dashCd / 1.4) * 100 : 100) + "%";
       ui.xpText.textContent = "Lv." + state.level + "  " + state.kills + "击败";
       ui.xpFill.style.width = clamp(state.xpValue / state.xpNeed * 100, 0, 100) + "%";
-      ui.runTitle.textContent = fmtTime(state.elapsed) + "  |  " + state.enemies.length + " 个敌人  |  连击 " + state.combo;
-      ui.runSub.textContent = "AI 队友：" + state.ally.mode + " | AI超频 " + Math.floor(state.overdrive) + "% | 存活 8 分钟并击败终局智能体。";
+      const stage = currentStage(), wave = currentWave();
+      const goalText = wave?.boss ? (state.boss ? "击败 " + state.boss.name : "Boss 即将出现") : "目标 " + state.waveKills + "/" + (wave?.goal || 0);
+      ui.runTitle.textContent = "第" + (state.stageIndex + 1) + "章 " + (stage?.name || "终局") + "  |  " + (wave?.name || "突围") + "  |  " + goalText;
+      ui.runSub.textContent = fmtTime(state.elapsed) + " | 敌人 " + state.enemies.length + " | 连击 " + state.combo + " | AI超频 " + Math.floor(state.overdrive) + "% | 队友：" + state.ally.mode;
       ui.aiMode.textContent = d.mode;
       ui.threatText.textContent = Math.round(d.threat * 100) + "%";
       ui.tempoText.textContent = Math.round(d.tempo * 100) + "%";
@@ -1381,7 +1497,7 @@
     function loadMeta() { try { state.meta = Object.assign(state.meta, JSON.parse(localStorage.getItem(META) || "{}")); } catch(_) {} }
     function saveGame() {
       if (state.phase !== "running" || !state.player) return;
-      localStorage.setItem(SAVE, JSON.stringify({ hero: state.stats.heroId, elapsed: state.elapsed, kills: state.kills, gold: state.gold, level: state.level, xpNeed: state.xpNeed, xpValue: state.xpValue, hp: state.player.hp, stats: state.stats }));
+      localStorage.setItem(SAVE, JSON.stringify({ hero: state.stats.heroId, elapsed: state.elapsed, kills: state.kills, gold: state.gold, level: state.level, xpNeed: state.xpNeed, xpValue: state.xpValue, hp: state.player.hp, stats: state.stats, stageIndex: state.stageIndex, waveIndex: state.waveIndex, waveKills: state.waveKills }));
     }
     function loadGame() { try { const d = JSON.parse(localStorage.getItem(SAVE) || "null"); if (!d) return false; state.selectedHero = d.hero || state.selectedHero; resetRun(d); return true; } catch(_) { return false; } }
 
