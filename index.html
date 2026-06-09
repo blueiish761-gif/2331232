@@ -360,6 +360,20 @@
       combo: 0, comboTimer: 0, overdrive: 0, supplyCd: 18
     };
 
+    function blessingPower() {
+      if (!state.stats || !state.stats.upgrades) return 0;
+      let total = 0;
+      for (const v of Object.values(state.stats.upgrades)) total += v || 0;
+      const weaponPower = (state.stats.blades || 0) * .35 + (state.stats.laser || 0) * .55 + (state.stats.bolt || 0) * .5 + (state.stats.mine || 0) * .45;
+      const statPower = Math.max(0, state.stats.damage || 0) * 2.3 + Math.max(0, state.stats.fireRate || 0) * 1.2 + Math.max(0, state.stats.crit || 0) * 4;
+      return total + weaponPower + statPower + Math.max(0, state.level - 1) * .35;
+    }
+
+    function adaptiveDifficulty() {
+      const chapterPressure = state.stageIndex * 1.35 + state.waveIndex * .28;
+      return Math.max(0, blessingPower() - 3 + chapterPressure);
+    }
+
     function makeRunStats(heroId) {
       const h = HEROES.find(x => x.id === heroId) || HEROES[0];
       return {
@@ -445,11 +459,14 @@
       const p = state.player;
       const x = clamp(p.x + Math.cos(angle) * radius, -ARENA / 2 + 80, ARENA / 2 - 80);
       const y = clamp(p.y + Math.sin(angle) * radius, -ARENA / 2 + 80, ARENA / 2 - 80);
-      const scale = 1.16 + state.stageIndex * .22 + state.waveIndex * .06 + state.elapsed / 640 + (elite ? .82 : 0);
+      const pressure = adaptiveDifficulty();
+      const late = Math.max(0, pressure - 2);
+      const scale = 1.12 + state.stageIndex * .25 + state.waveIndex * .075 + state.elapsed / 740 + late * .055 + (elite ? .98 + late * .035 : 0);
       state.enemies.push({
         type, x, y, vx: 0, vy: 0, r: def.r * (elite ? 1.18 : 1), hp: def.hp * scale, maxHp: def.hp * scale,
-        speed: def.speed * (1 + state.elapsed / 900), color: def.color, value: def.value * (elite ? 3 : 1),
-        cd: rand(.4, 1.4), ai: rand(0, 1), elite, charge: 0, phase: 1
+        speed: def.speed * (1 + state.stageIndex * .025 + state.elapsed / 980 + late * .009), color: def.color, value: def.value * (elite ? 3 : 1),
+        cd: rand(.35, 1.25), ai: rand(0, 1), elite, charge: 0, phase: 1,
+        damageMul: 1 + state.stageIndex * .09 + late * .035 + (elite ? .26 : 0)
       });
     }
 
@@ -475,8 +492,9 @@
       state.stats.shield = Math.min(state.stats.shieldMax * 1.4, state.stats.shield + 30);
       state.phase = "running";
       ui.upgradeScreen.classList.remove("on");
-      const scale = 1 + state.stageIndex * .28;
-      state.boss = { type: "boss", name: def.name, mode: def.mode, x, y, vx: 0, vy: 0, r: 46, hp: def.hp * scale, maxHp: def.hp * scale, speed: 72 + state.stageIndex * 8, color: def.color, cd: 1.6, special: 5.2, intro: 4.4, phase: 1, value: 80 + state.stageIndex * 24, introLock: 2.6, ai: rand(0, 1), touchCd: 0 };
+      const pressure = adaptiveDifficulty();
+      const scale = 1 + state.stageIndex * .34 + Math.max(0, pressure - 2) * .06;
+      state.boss = { type: "boss", name: def.name, mode: def.mode, x, y, vx: 0, vy: 0, r: 46, hp: def.hp * scale, maxHp: def.hp * scale, speed: 76 + state.stageIndex * 10 + Math.max(0, pressure - 4) * 1.4, color: def.color, cd: 1.6, special: 4.8, intro: 4.4, phase: 1, value: 80 + state.stageIndex * 24, introLock: 2.6, ai: rand(0, 1), touchCd: 0, damageMul: 1 + state.stageIndex * .12 + Math.max(0, pressure - 4) * .045 };
       state.enemies.push(state.boss);
       state.shake = .28;
       state.waves.push({ x: p.x, y: p.y, r: 24, max: 420, life: .75, color: "#7be8ff" });
@@ -685,22 +703,23 @@
         if (e.type === "shielder" && Math.random() < dt * 4) {
           for (const o of state.enemies) if (o !== e && !o.dead && o.type !== "boss" && Math.hypot(o.x - e.x, o.y - e.y) < 160) o.guard = .22;
         }
+        const pressure = adaptiveDifficulty();
         if (e.type === "summoner" && e.cd <= 0) {
-          for (let i = 0; i < 2 + (e.elite ? 1 : 0); i++) spawnEnemy(Math.random() < .6 ? "seeker" : "splitter", false, false);
-          e.cd = rand(4.2, 6.2);
+          for (let i = 0; i < 2 + (e.elite ? 1 : 0) + (pressure > 12 ? 1 : 0); i++) spawnEnemy(Math.random() < .6 ? "seeker" : "splitter", false, false);
+          e.cd = Math.max(2.8, rand(4.2, 6.2) - pressure * .035);
           state.waves.push({ x: e.x, y: e.y, r: 10, max: 95, life: .35, color: e.color });
         }
         if (e.type === "bomber" && d < 72) {
           e.dead = true;
           state.waves.push({ x: e.x, y: e.y, r: 16, max: 130, life: .38, color: e.color });
           burst(e.x, e.y, e.color, 44, 300);
-          if (d < 118) damagePlayer(e.elite ? 34 : 22, e.x, e.y);
+          if (d < 118) damagePlayer((e.elite ? 34 : 22) * (e.damageMul || 1), e.x, e.y);
           for (const o of state.enemies) if (!o.dead && o !== e && Math.hypot(o.x - e.x, o.y - e.y) < o.r + 95) damageEnemy(o, 28, e.x, e.y);
           continue;
         }
         if (e.type === "charger") {
           e.charge -= dt;
-          if (e.charge <= 0 && d < 420) { e.vx += ax * 620; e.vy += ay * 620; e.charge = rand(3, 4.5); warnLine(e.x, e.y, Math.atan2(dy, dx)); }
+          if (e.charge <= 0 && d < 420) { e.vx += ax * (620 + pressure * 5); e.vy += ay * (620 + pressure * 5); e.charge = Math.max(2.1, rand(3, 4.5) - pressure * .035); warnLine(e.x, e.y, Math.atan2(dy, dx)); }
         }
         if (e.boss || e.type === "boss") {
           const hpRate = e.hp / e.maxHp;
@@ -728,7 +747,7 @@
           else if (e.special <= 0) bossSkill(e);
         }
         const speedMul = e.slow > 0 ? .72 : 1;
-        e.vx += ax * e.speed * 4.8 * speedMul * dt; e.vy += ay * e.speed * 4.8 * speedMul * dt;
+        e.vx += ax * e.speed * (4.8 + Math.min(pressure, 18) * .025) * speedMul * dt; e.vy += ay * e.speed * (4.8 + Math.min(pressure, 18) * .025) * speedMul * dt;
         if (e.type === "boss") {
           const maxBossSpeed = e.introLock > 0 ? 0 : 340 + e.phase * 55;
           const bossSpeed = Math.hypot(e.vx, e.vy);
@@ -746,22 +765,22 @@
         resolveProps(e);
         if (e.type === "ranger" && e.cd <= 0 && d < 560) {
           const lead = .22 + state.stageIndex * .03;
-          fireBullet(e.x, e.y, dx + p.vx * lead, dy + p.vy * lead, 285 + state.stageIndex * 12, 11 + state.stageIndex * 2, "#ffd36b", 5, true, "enemy");
-          e.cd = rand(1.25, 2.1);
+          fireBullet(e.x, e.y, dx + p.vx * lead, dy + p.vy * lead, 300 + state.stageIndex * 16 + pressure * 3, (11 + state.stageIndex * 2) * (e.damageMul || 1), "#ffd36b", 5, true, "enemy");
+          e.cd = Math.max(.78, rand(1.25, 2.1) - pressure * .025);
         }
         if (e.type === "sniper" && e.cd <= 0 && d < 760) {
           const a = Math.atan2(dy + p.vy * .32, dx + p.vx * .32);
           warnLine(e.x, e.y, a);
-          fireBullet(e.x, e.y, Math.cos(a), Math.sin(a), 540, 18 + state.stageIndex * 3, "#fff4c8", 6, true, "enemy");
-          e.cd = rand(2.4, 3.4);
+          fireBullet(e.x, e.y, Math.cos(a), Math.sin(a), 560 + pressure * 4, (18 + state.stageIndex * 3) * (e.damageMul || 1), "#fff4c8", 6, true, "enemy");
+          e.cd = Math.max(1.35, rand(2.4, 3.4) - pressure * .035);
         }
         if (d < e.r + p.r + 2 && !(e.type === "boss" && e.introLock > 0)) {
           if (e.type === "boss") {
             if ((e.touchCd || 0) <= 0) {
-              damagePlayer(18, e.x, e.y);
+              damagePlayer(18 * (e.damageMul || 1), e.x, e.y);
               e.touchCd = 1.15;
             }
-          } else damagePlayer(e.elite ? 16 : 10, e.x, e.y);
+          } else damagePlayer((e.elite ? 16 : 10) * (e.damageMul || 1), e.x, e.y);
         }
         e.touchCd = Math.max(0, (e.touchCd || 0) - dt);
       }
@@ -810,23 +829,25 @@
     }
 
     function bossSkill(e) {
-      e.special = Math.max(1.5, 3.4 - e.phase * .45);
+      const pressure = adaptiveDifficulty();
+      const heat = Math.min(18, Math.max(0, pressure - 3));
+      e.special = Math.max(1.05, 3.25 - e.phase * .5 - heat * .035);
       if (e.mode === "swarm" || e.mode === "all") {
-        for (let i = 0; i < 5 + e.phase * 2; i++) spawnEnemy(Math.random() < .5 ? "seeker" : "charger", false, false);
+        for (let i = 0; i < 5 + e.phase * 2 + Math.floor(heat / 5); i++) spawnEnemy(Math.random() < .5 ? "seeker" : "charger", heat > 12 && i === 0, false);
       }
       if (e.mode === "split" || e.mode === "all") {
-        const count = 10 + e.phase * 4;
+        const count = 10 + e.phase * 4 + Math.floor(heat / 3);
         for (let i = 0; i < count; i++) {
           const a = i / count * Math.PI * 2;
-          fireBullet(e.x, e.y, Math.cos(a), Math.sin(a), 210 + e.phase * 25, 13 + e.phase * 4, e.color, 6, true, "enemy");
+          fireBullet(e.x, e.y, Math.cos(a), Math.sin(a), 220 + e.phase * 28 + heat * 3, (13 + e.phase * 4) * (e.damageMul || 1), e.color, 6, true, "enemy");
         }
       }
       if (e.mode === "charge" || e.mode === "all") {
         const p = state.player, a = Math.atan2(p.y - e.y, p.x - e.x);
         warnLine(e.x, e.y, a);
-        e.chargeWarn = .42;
+        e.chargeWarn = Math.max(.28, .42 - heat * .006);
         e.chargeAngle = a;
-        for (let i = 0; i < 4 + e.phase; i++) spawnEnemy(Math.random() < .5 ? "charger" : "tank", i === 0 && e.phase >= 2, false);
+        for (let i = 0; i < 4 + e.phase + Math.floor(heat / 7); i++) spawnEnemy(Math.random() < .5 ? "charger" : "tank", i === 0 && e.phase >= 2, false);
         state.hazards.push({ x: clamp(p.x + rand(-190, 190), -ARENA/2 + 160, ARENA/2 - 160), y: clamp(p.y + rand(-190, 190), -ARENA/2 + 160, ARENA/2 - 160), r: rand(32, 48), timer: 0, active: false, life: 3.25 });
       }
       if (e.mode === "beam" || e.mode === "all") {
@@ -834,9 +855,9 @@
         for (let i = -1; i <= 1; i++) {
           const a = base + i * .34;
           warnLine(e.x, e.y, a);
-          state.enemyBullets.push({ x: e.x, y: e.y, vx: 0, vy: 0, r: 0, damage: 18 + e.phase * 8, ttl: .22, color: e.color, laser: true, tx: e.x + Math.cos(a) * 900, ty: e.y + Math.sin(a) * 900, pierce: 1 });
+          state.enemyBullets.push({ x: e.x, y: e.y, vx: 0, vy: 0, r: 0, damage: (18 + e.phase * 8) * (e.damageMul || 1), ttl: .24 + heat * .004, color: e.color, laser: true, tx: e.x + Math.cos(a) * 900, ty: e.y + Math.sin(a) * 900, pierce: 1 });
         }
-        for (let i = 0; i < 3 + e.phase; i++) spawnEnemy(Math.random() < .65 ? "ranger" : "splitter", false, false);
+        for (let i = 0; i < 3 + e.phase + Math.floor(heat / 6); i++) spawnEnemy(Math.random() < .65 ? "ranger" : "splitter", heat > 14 && i === 0, false);
       }
       state.shake = .18;
       burst(e.x, e.y, e.color, 32, 260);
@@ -920,18 +941,21 @@
 
       state.spawnCd -= dt; state.eliteCd -= dt;
       const d = state.director;
+      const pressure = adaptiveDifficulty();
+      const heat = Math.min(18, Math.max(0, pressure - 3));
       let rate = d.mode === "高压围攻" ? .55 : d.mode === "救援补给" ? 1.18 : d.mode === "推进节奏" ? .78 : .96;
-      rate = Math.max(.18, rate - state.stageIndex * .055 - state.waveIndex * .025);
+      rate = Math.max(.14, rate - state.stageIndex * .065 - state.waveIndex * .03 - heat * .008);
       if (state.spawnCd <= 0 && state.waveKills < wave.goal) {
         const packMin = wave.pack?.[0] || 2, packMax = wave.pack?.[1] || 4;
-        const pressureExtra = state.stageIndex < 2 ? 1 : 2;
-        const pack = d.mode === "高压围攻" ? irand(packMax, packMax + pressureExtra) : irand(packMin, packMax);
+        const pressureExtra = state.stageIndex < 2 ? 1 : 2 + Math.floor(heat / 7);
+        const packBoost = heat > 9 && state.waveIndex >= 1 ? 1 : 0;
+        const pack = (d.mode === "高压围攻" ? irand(packMax, packMax + pressureExtra) : irand(packMin, packMax)) + packBoost;
         for (let i = 0; i < pack; i++) spawnEnemy(wave.types[irand(0, wave.types.length - 1)], !!wave.elite, false);
         state.spawnCd = rate;
       }
       if (!wave.elite && state.eliteCd <= 0 && state.waveIndex >= 1) {
         spawnEnemy(wave.types[irand(0, wave.types.length - 1)], true, false);
-        state.eliteCd = Math.max(12, 28 - state.stageIndex * 3 - state.waveIndex * 2);
+        state.eliteCd = Math.max(7.5, 28 - state.stageIndex * 3.6 - state.waveIndex * 2.4 - heat * .35);
       }
       if ((wave.supply || state.supplyCd <= 0) && state.waveTimer > 8) {
         spawnSupply();
